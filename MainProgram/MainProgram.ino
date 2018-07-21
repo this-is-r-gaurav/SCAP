@@ -22,17 +22,20 @@ const char* gssid     = "Gionee M2";
 const char* password = "15013029";
 const char* host = "beast-app.eu-gb.mybluemix.net";
 const int port = 443;
+//analog pin : D1,D2,D3, D4,D6,D7,D8,RSV
+//
 
 //Sensor Pin Number and Node MCU conncetion
-const int trigPinFront = D2;  
-const int echoPinFront = D4;
-const int trigPinBack= D5;  
-const int echoPinBack = D7; 
-int motor = D5;
+const int trigPinFront = D1;  
+const int echoPinFront = D2;
+const int trigPinBack= D3;  
+const int echoPinBack = D4; 
+int motor = D6;
+int alert_led = D7;
 
 
 //other variables defining states of car
-boolean brake_failed=true, brake_failed_status;
+boolean brake_failed=false, brake_failed_status;
 int distFromFront,distFromBack;
 int very_near = 5, near = 10, mid = 20, far =30; 
 int spd,working_speed;
@@ -42,32 +45,46 @@ int spd,working_speed;
 int get_direction(int, int);
 boolean check_status_of_brake(boolean);
 void post_brake_status();
-void wifiConnect(const char *,const char *)
-void callback(char* topic, byte* payload, unsigned int payloadLength);
+void wifiConnect(const char *,const char *);
+//void callback(char* topic, byte* payload, unsigned int payloadLength);
 
 WiFiClient wifiClient;
-PubSubClient client(server, 1883, callback, wifiClient);
+PubSubClient client(server, 1883, wifiClient);
 
 void setup() {
     Serial.begin(115200);
- 
+    delay(1000);
+//    Serial.println("Trigger Front Pin:"+ String(trigPinFront));
+//    Serial.println("Echo Front Pin:" + String(echoPinFront));
+//    
+//    Serial.println("Trigger Pin Back:"+String(trigPinBack));
+//    Serial.println("Echo Back Pin:"+String(echoPinBack));
     pinMode(trigPinFront, OUTPUT); 
     pinMode(echoPinFront, INPUT);
     pinMode(trigPinBack, OUTPUT); 
     pinMode(echoPinBack, INPUT); 
     pinMode(motor, OUTPUT);
+    pinMode(alert_led, OUTPUT);
 
-    wifiConnect(gssid,password);
-    mqttConnect();
+    //wifiConnect(gssid,password);
+    //mqttConnect();
     
     brake_failed_status= check_status_of_brake(brake_failed);
     spd=0;
-  
-    digitalWrite(motor,HIGH);
+    if (!brake_failed_status){
+      for(int i =0; i<100; i++)
+      {
+          spd +=1;
+          analogWrite(motor,spd);
+          Serial.println(spd);
+          delay(100);
+       }
+    }
     Serial.println(spd);
   
     Serial.println();
     Serial.println();
+    delay(1000);
 
 }
 
@@ -80,32 +97,32 @@ void loop() {
             delay(100);
             distFromBack = get_distance(trigPinBack, echoPinBack);
             delay(100);
-            while (isnan(distFromFront) || isnan(distFromFront) || distFromFront ==0 || distFromBack == 0)
+            while (isnan(distFromFront) || isnan(distFromFront))
             {
               Serial.println("Your Sensor aren't working Properly, Connect Your Sensor Properly");
               delay(1000);
             }
-            if(distanceFromFront < very_near){
+            if(distFromFront < very_near){
                   spd = 0;
-                  Serial.println("The Vehicle Ahead You is too closer, Stopping your vehicle and dropping Speed down to " spd );
+                  Serial.println("The Vehicle Ahead You is too closer, Stopping your vehicle and dropping Speed down to " + String(spd) );
             }
             else if (distFromFront<= near){
                 if (distFromBack <= near)
                 {
                     spd = 0;
-                    Serial.println("The Vehicle ahaed You and behind You are approaching near, So decrasing speed down to" spd);
+                    Serial.println("The Vehicle ahaed You and behind You are approaching near, So decrasing speed down to" +String(spd));
                 }
                 else
                 {
-                    spd -= 20
-                    Serial.println("The Vehicle ahaed You and behind You are approaching near, So decrasing speed down to" spd);
+                    spd -= 20;
+                    Serial.println("The Vehicle ahaed You and behind You are approaching near, So decrasing speed down to"+ String(spd));
                 }
             }
             else if(distFromFront<=mid && distFromFront>near){
 
                if (distFromBack<near){
                   spd += 20;
-                  Serial.println("The Vehicle behind you is approaching towards You so increasing speed by " spd);
+                  Serial.println("The Vehicle behind you is approaching towards You so increasing speed by "+ String(spd));
                }
                else{
                 
@@ -116,26 +133,40 @@ void loop() {
             else if (distFromFront<=far && distFromFront>mid) {
                if (distFromBack<near){
                   spd += 30;
-                  Serial.println("The Vehicle behind you is approaching towards You so increasing speed by " spd);
+                  Serial.println("The Vehicle behind you is approaching towards You so increasing speed by " + String(spd));
                }
                else{
                   spd+=10; 
                }
             }
-            PublishData(spd);
-            if (!client.loop()) {
-                mqttConnect();
-            }
+            //PublishData(spd);
+//            if (!client.loop()) {
+//                mqttConnect();
+//            }
             delay(100);
+            analogWrite(motor,spd);
         }
-        brake_status = check_brake_stauts(brake_failed);
+        brake_failed_status = check_status_of_brake(brake_failed);
     }
+    Serial.println("Brake Failed Call Mechanic");
+    delay(100);
+    while(brake_failed_status){
+        digitalWrite(alert_led,HIGH);
+        delay(100);
+        digitalWrite(alert_led,LOW);
+        delay(100);
+    }
+    
+  
             
 }
+   
 
 int get_distance(int t_pin, int e_pin){
     int distance;
     int duration;
+    Serial.println("T_pin:"+String(t_pin));
+    Serial.println("T_pin:"+String(e_pin));
     digitalWrite(t_pin, LOW);
     delay(2);
     digitalWrite(t_pin, HIGH);
